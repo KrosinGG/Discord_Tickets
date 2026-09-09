@@ -148,9 +148,12 @@ def _format_date_time_value(val: Any) -> Tuple[Optional[str], Optional[str]]:
     return t, d
 
 
-def _generate_qr_data_uri(message: str) -> str:
-    """Генерирует SVG Data URI QR-кода высокой четкости без потерь качества."""
-    qr = segno.make(message, error="M")
+def _generate_qr_data_uri(message: str, encoding: Optional[str] = None) -> str:
+    """
+    Генерирует SVG Data URI полноценного стандартного QR-кода (ISO/IEC 18004) с 3 угловыми метками.
+    Использует segno.make_qr (без Micro QR), в точности как генератор CoreImage PassKit в iOS.
+    """
+    qr = segno.make_qr(message, error="M", encoding=encoding)
     buffer = io.BytesIO()
     qr.save(buffer, kind="svg", border=0, dark="#000000", light=None)
     svg_bytes = buffer.getvalue()
@@ -339,6 +342,7 @@ def parse_pkpass(file_bytes: bytes) -> Dict[str, Any]:
         message = barcode_obj.get("message", "")
         alt_text = barcode_obj.get("altText", message)
         b_format = barcode_obj.get("format", "PKBarcodeFormatQR")
+        encoding = barcode_obj.get("messageEncoding")
 
         if message:
             if "code128" in b_format.lower():
@@ -347,12 +351,12 @@ def parse_pkpass(file_bytes: bytes) -> Dict[str, Any]:
                     barcode_type = "1d"
                 except Exception as e:
                     logger.warning("Ошибка генерации Code128, откат к QR: %s", e)
-                    barcode_uri = _generate_qr_data_uri(message)
+                    barcode_uri = _generate_qr_data_uri(message, encoding=encoding)
                     barcode_type = "qr"
             else:
-                # По умолчанию генерируем QR (PKBarcodeFormatQR, PKBarcodeFormatAztec, PKBarcodeFormatPDF417)
+                # По умолчанию генерируем полноценный QR (PKBarcodeFormatQR, PKBarcodeFormatAztec, PKBarcodeFormatPDF417)
                 try:
-                    barcode_uri = _generate_qr_data_uri(message)
+                    barcode_uri = _generate_qr_data_uri(message, encoding=encoding)
                     barcode_type = "qr"
                 except Exception as e:
                     logger.error("Ошибка генерации QR-кода: %s", e)
