@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Apple Wallet Tickets</title>
+    <style>
+        @page {
+            size: A4 portrait;
+            margin: 0;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+        }
+
+        body {
+            background-color: #000000;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #FFFFFF;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        .ticket-page {
+            width: 100vw;
+            height: 100vh;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #000000;
+            page-break-after: always;
+            break-after: page;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .ticket-page:last-child {
+            page-break-after: avoid;
+            break-after: avoid;
+        }
+
+        /* Карточка Apple Wallet */
+        .wallet-card {
+            width: 375px;
+            min-height: 560px;
+            max-height: 92vh;
+            border-radius: 18px;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.75), 0 0 2px rgba(255, 255, 255, 0.1);
+        }
+
+        /* Вырез Notch сверху по центру */
+        .ticket-notch {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90px;
+            height: 19px;
+            background-color: #000000;
+            border-bottom-left-radius: 45px 19px;
+            border-bottom-right-radius: 45px 19px;
+            z-index: 20;
+        }
+
+        /* Шапка билета (логотип + дата/время) */
+        .card-header {
+            padding: 22px 20px 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            position: relative;
+            z-index: 10;
+        }
+
+        .header-logo-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            max-width: 60%;
+        }
+
+        .ticket-logo {
+            max-height: 38px;
+            max-width: 130px;
+            object-fit: contain;
+            display: block;
+        }
+
+        .ticket-logo-text {
+            font-size: 17px;
+            font-weight: 700;
+            letter-spacing: -0.2px;
+            line-height: 1.1;
+        }
+
+        .header-datetime {
+            text-align: right;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            justify-content: flex-start;
+        }
+
+        .header-time {
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.1px;
+            line-height: 1.2;
+            opacity: 0.95;
+            margin-bottom: 2px;
+        }
+
+        .header-date {
+            font-size: 21px;
+            font-weight: 500;
+            letter-spacing: -0.3px;
+            line-height: 1.15;
+            white-space: nowrap;
+        }
+
+        /* Полоса Strip изображения, если есть */
+        .card-strip {
+            width: 100%;
+            max-height: 120px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .card-strip img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        /* Основное тело с полями */
+        .card-body {
+            padding: 8px 22px 18px 22px;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .field-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .field-label {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
+            line-height: 1.2;
+            margin-bottom: 3px;
+        }
+
+        .field-value-primary {
+            font-size: 26px;
+            font-weight: 500;
+            line-height: 1.18;
+            letter-spacing: -0.3px;
+            word-break: break-word;
+        }
+
+        /* Строка колонок (Section, Row, Seat) */
+        .fields-row {
+            display: flex;
+            flex-direction: row;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 14px;
+            width: 100%;
+        }
+
+        .fields-row .field-group {
+            flex: 1;
+        }
+
+        .field-value {
+            font-size: 18px;
+            font-weight: 500;
+            line-height: 1.25;
+            letter-spacing: -0.2px;
+            word-break: break-word;
+        }
+
+        /* Нижний блок штрихкода */
+        .card-barcode-section {
+            margin-top: auto;
+            padding: 10px 20px 24px 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            z-index: 10;
+        }
+
+        .barcode-box {
+            background-color: #FFFFFF;
+            border-radius: 14px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+        }
+
+        /* Для светлых карточек (как CSO) плашка бесшовная без тени */
+        .wallet-card.light-card .barcode-box {
+            background-color: transparent !important;
+            box-shadow: none !important;
+            padding-top: 0 !important;
+        }
+
+        /* Для QR-кодов */
+        .barcode-box.qr-mode {
+            width: 260px;
+            padding: 18px 18px 14px 18px;
+        }
+
+        .barcode-img-qr {
+            width: 195px;
+            height: 195px;
+            display: block;
+        }
+
+        /* Для 1D штрихкодов */
+        .barcode-box.code128-mode {
+            width: 290px;
+            padding: 18px 16px 14px 16px;
+        }
+
+        .barcode-img-1d {
+            width: 100%;
+            max-height: 60px;
+            display: block;
+        }
+
+        .barcode-alt-text {
+            color: #000000;
+            font-size: 14.5px;
+            font-weight: 500;
+            letter-spacing: 0.8px;
+            text-align: center;
+            margin-top: 8px;
+            line-height: 1.2;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+        }
+    </style>
+</head>
+<body>
+    {% for ticket in tickets %}
+    <div class="ticket-page">
+        <div class="wallet-card{% if not ticket.is_dark_bg %} light-card{% endif %}" style="background-color: {{ ticket.background_color }}; color: {{ ticket.foreground_color }};">
+            <!-- Notch вырез сверху -->
+            <div class="ticket-notch"></div>
+
+            <!-- Верхняя плашка (Logo + Дата/Время) -->
+            <div class="card-header">
+                <div class="header-logo-group">
+                    {% if ticket.logo_image %}
+                    <img src="{{ ticket.logo_image }}" class="ticket-logo" alt="" onerror="this.style.display='none'">
+                    {% endif %}
+                    {% if ticket.logo_text %}
+                    <span class="ticket-logo-text" style="color: {{ ticket.foreground_color }};">{{ ticket.logo_text }}</span>
+                    {% elif not ticket.logo_image and ticket.organization_name %}
+                    <span class="ticket-logo-text" style="color: {{ ticket.foreground_color }};">{{ ticket.organization_name }}</span>
+                    {% endif %}
+                </div>
+
+                <div class="header-datetime">
+                    {% if ticket.header_time %}
+                    <div class="header-time" style="color: {{ ticket.foreground_color }};">{{ ticket.header_time }}</div>
+                    {% endif %}
+                    {% if ticket.header_date %}
+                    <div class="header-date" style="color: {{ ticket.foreground_color }};">{{ ticket.header_date }}</div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Изображение полосы (Strip), если есть -->
+            {% if ticket.strip_image %}
+            <div class="card-strip">
+                <img src="{{ ticket.strip_image }}" alt="Strip">
+            </div>
+            {% endif %}
+
+            <!-- Тело билета с полями -->
+            <div class="card-body">
+                <!-- Первичные поля (Title, Event, Artist) -->
+                {% for field in ticket.primary_fields %}
+                <div class="field-group">
+                    {% if field.label %}
+                    <div class="field-label" style="color: {{ ticket.label_color }};">{{ field.label }}</div>
+                    {% endif %}
+                    <div class="field-value-primary" style="color: {{ ticket.foreground_color }};">{{ field.value }}</div>
+                </div>
+                {% endfor %}
+
+                <!-- Вторичные поля (Venue, Section/Row/Seat) -->
+                {% if ticket.secondary_fields %}
+                    {% if ticket.secondary_fields|length == 1 %}
+                        {% for field in ticket.secondary_fields %}
+                        <div class="field-group">
+                            {% if field.label %}
+                            <div class="field-label" style="color: {{ ticket.label_color }};">{{ field.label }}</div>
+                            {% endif %}
+                            <div class="field-value" style="color: {{ ticket.foreground_color }};">{{ field.value }}</div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="fields-row">
+                            {% for field in ticket.secondary_fields %}
+                            <div class="field-group">
+                                {% if field.label %}
+                                <div class="field-label" style="color: {{ ticket.label_color }};">{{ field.label }}</div>
+                                {% endif %}
+                                <div class="field-value" style="color: {{ ticket.foreground_color }};">{{ field.value }}</div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endif %}
+
+                <!-- Вспомогательные поля (Order ID, Price Code, etc.) -->
+                {% if ticket.auxiliary_fields %}
+                    {% if ticket.auxiliary_fields|length == 1 %}
+                        {% for field in ticket.auxiliary_fields %}
+                        <div class="field-group">
+                            {% if field.label %}
+                            <div class="field-label" style="color: {{ ticket.label_color }};">{{ field.label }}</div>
+                            {% endif %}
+                            <div class="field-value" style="color: {{ ticket.foreground_color }};">{{ field.value }}</div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="fields-row">
+                            {% for field in ticket.auxiliary_fields %}
+                            <div class="field-group">
+                                {% if field.label %}
+                                <div class="field-label" style="color: {{ ticket.label_color }};">{{ field.label }}</div>
+                                {% endif %}
+                                <div class="field-value" style="color: {{ ticket.foreground_color }};">{{ field.value }}</div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                {% endif %}
+            </div>
+
+            <!-- Секция штрих-кода / QR-кода -->
+            {% if ticket.barcode_uri %}
+            <div class="card-barcode-section">
+                {% if ticket.barcode_type == '1d' %}
+                <div class="barcode-box code128-mode">
+                    <img src="{{ ticket.barcode_uri }}" class="barcode-img-1d" alt="Barcode">
+                    {% if ticket.alt_text %}
+                    <div class="barcode-alt-text">{{ ticket.alt_text }}</div>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="barcode-box qr-mode">
+                    <img src="{{ ticket.barcode_uri }}" class="barcode-img-qr" alt="QR Code">
+                    {% if ticket.alt_text %}
+                    <div class="barcode-alt-text">{{ ticket.alt_text }}</div>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</body>
+</html>

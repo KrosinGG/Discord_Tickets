@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  pkpass-bot:
+    build: .
+    container_name: discord_tickets_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1

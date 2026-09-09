@@ -1,0 +1,32 @@
+# Environment Variables
+.env
+*.env
+
+# Python Virtual Environment
+.venv/
+venv/
+env/
+ENV/
+
+# Python Cache & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Playwright
+ms-playwright/
+.playwright/
+
+# Generated outputs
+*.pdf
+output/
+debug_*.html
+
+# IDE / OS
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+.DS_Store
