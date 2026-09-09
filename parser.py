@@ -103,29 +103,49 @@ def _is_dark_color(css_color: str) -> bool:
     return True
 
 
-def _format_date_time_value(val: Any) -> Tuple[Optional[str], Optional[str]]:
+def _extract_iso_or_text_date(val: Any) -> Tuple[Optional[str], Optional[str], Optional[str]]:
     """
-    Пытается распарсить строку даты/времени ISO 8601 и вернуть (time_str, date_str).
-    Например: ("1:00 PM", "Sep 6, 2026")
+    Парсит дату/время и возвращает (time_str, date_str, yyyy_mm_dd).
+    Для ISO 8601 сохраняет локальное время билета без ошибочного сдвига в UTC.
+    Например: ("8:00 PM", "Sep 5, 2026", "2026-09-05").
     """
     if not isinstance(val, str):
-        return None, str(val) if val is not None else None
+        return None, None, None
 
-    # Проверка на ISO дату
-    iso_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?")
-    if iso_pattern.match(val):
+    val_str = val.strip()
+
+    # 1. ISO 8601 формат
+    iso_match = re.match(r"^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::\d{2})?", val_str)
+    if iso_match:
         try:
-            # Убираем Z или смещение часового пояса для простого парсинга, либо парсим ISO
-            dt = datetime.fromisoformat(val)
-            # Форматирование времени: 1:00 PM или 13:00
-            hour = dt.strftime("%I:%M %p").lstrip("0")
-            # Форматирование даты: Sep 6, 2026
+            year, month, day = int(iso_match.group(1)), int(iso_match.group(2)), int(iso_match.group(3))
+            hour, minute = int(iso_match.group(4)), int(iso_match.group(5))
+            dt = datetime(year, month, day, hour, minute)
+            time_str = dt.strftime("%I:%M %p").lstrip("0")
             date_str = f"{dt.strftime('%b')} {dt.day}, {dt.year}"
-            return hour, date_str
+            ymd_str = f"{year:04d}-{month:02d}-{day:02d}"
+            return time_str, date_str, ymd_str
         except Exception:
             pass
 
-    return None, val
+    # 2. Текстовая дата вроде "Sep 5, 2026" или "September 5, 2026"
+    date_text_match = re.search(r"([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{4})", val_str)
+    if date_text_match:
+        m_name, day, year = date_text_match.group(1), date_text_match.group(2), date_text_match.group(3)
+        for fmt in ("%b %d %Y", "%B %d %Y"):
+            try:
+                dt = datetime.strptime(f"{m_name[:3].capitalize()} {day} {year}", "%b %d %Y")
+                return None, f"{dt.strftime('%b')} {dt.day}, {dt.year}", dt.strftime("%Y-%m-%d")
+            except ValueError:
+                continue
+
+    return None, None, None
+
+
+def _format_date_time_value(val: Any) -> Tuple[Optional[str], Optional[str]]:
+    """Вспомогательная функция для совместимости, возвращает (time_str, date_str)."""
+    t, d, _ = _extract_iso_or_text_date(val)
+    return t, d
 
 
 def _generate_qr_data_uri(message: str) -> str:
@@ -249,35 +269,59 @@ def parse_pkpass(file_bytes: bytes) -> Dict[str, Any]:
     secondary_fields = extract_fields("secondaryFields")
     auxiliary_fields = extract_fields("auxiliaryFields")
 
-    # Извлечение даты события для заголовка и имени файла
+    # Извлечение полей заголовка (headerFields) и даты события
+    # В Apple Wallet правый верхний угол формируется строго из headerFields (label сверху, value снизу)
+    normalized_header_fields = []
     event_date_str = None
-    header_time_str = None
-    header_date_str = None
 
-    # 1. Проверяем relevantDate в pass_data
-    relevant_date = pass_data.get("relevantDate")
-    if relevant_date:
-        t_str, d_str = _format_date_time_value(relevant_date)
-        if t_str and d_str:
-            header_time_str = t_str
-            header_date_str = d_str
-            event_date_str = relevant_date[:10]
-
-    # 2. Проверяем headerFields на дату/время
     for hf in header_fields:
-        t_str, d_str = _format_date_time_value(hf["raw_value"])
-        if t_str and d_str:
-            if not header_time_str:
-                header_time_str = t_str
-            if not header_date_str:
-                header_date_str = d_str
+        lbl = hf.get("label", "").strip()
+        val = hf.get("value", "").strip()
+        raw_val = hf.get("raw_value", "").strip()
+
+        # Проверяем, содержит ли значение или сырое значение дату в формате ISO
+        iso_time, iso_date, iso_ymd = _extract_iso_or_text_date(raw_val)
+        if not iso_time and not iso_date:
+            iso_time, iso_date, iso_ymd = _extract_iso_or_text_date(val)
+
+        if iso_time and iso_date:
             if not event_date_str:
-                event_date_str = hf["raw_value"][:10]
-        elif not header_date_str and hf["value"]:
-            # Например если значение "Sep 5, 2026"
-            header_date_str = hf["value"]
-            if hf["label"] and not header_time_str:
-                header_time_str = hf["label"]
+                event_date_str = iso_ymd
+            # Если label пустой или системный ("DATE", "TIME"), выводим дату в label, а время в value
+            if not lbl or lbl.lower() in ("date", "time", "event date", "date & time"):
+                normalized_header_fields.append({
+                    "label": iso_date,
+                    "value": iso_time,
+                })
+            else:
+                normalized_header_fields.append({
+                    "label": lbl,
+                    "value": iso_time,
+                })
+        else:
+            # Значение уже является отформатированной строкой (например, label="SEP 5, 2026", value="8:00 PM")
+            _, _, ymd1 = _extract_iso_or_text_date(lbl)
+            _, _, ymd2 = _extract_iso_or_text_date(val)
+            if not event_date_str:
+                event_date_str = ymd1 or ymd2
+
+            normalized_header_fields.append({
+                "label": lbl,
+                "value": val,
+            })
+
+    # Если в headerFields ничего не найдено, используем fallback на relevantDate
+    if not normalized_header_fields:
+        relevant_date = pass_data.get("relevantDate")
+        if relevant_date:
+            r_time, r_date, r_ymd = _extract_iso_or_text_date(relevant_date)
+            if r_time and r_date:
+                normalized_header_fields.append({
+                    "label": r_date,
+                    "value": r_time,
+                })
+                if not event_date_str:
+                    event_date_str = r_ymd
 
     # Штрих-код / QR-код
     barcode_obj = None
@@ -337,9 +381,9 @@ def parse_pkpass(file_bytes: bytes) -> Dict[str, Any]:
         "foreground_color": fg_color,
         "label_color": lbl_color,
         "is_dark_bg": is_dark,
-        "header_time": header_time_str,
-        "header_date": header_date_str,
-        "header_fields": header_fields,
+        "header_time": normalized_header_fields[0]["value"] if normalized_header_fields else "",
+        "header_date": normalized_header_fields[0]["label"] if normalized_header_fields else "",
+        "header_fields": normalized_header_fields,
         "primary_fields": primary_fields,
         "secondary_fields": secondary_fields,
         "auxiliary_fields": auxiliary_fields,

@@ -110,19 +110,26 @@
             flex-direction: column;
             align-items: flex-end;
             justify-content: flex-start;
+            gap: 6px;
         }
 
-        .header-time {
-            font-size: 13px;
-            font-weight: 600;
-            letter-spacing: 0.1px;
+        .header-field {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+
+        .header-label {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.6px;
             line-height: 1.2;
-            opacity: 0.95;
             margin-bottom: 2px;
         }
 
-        .header-date {
-            font-size: 21px;
+        .header-value {
+            font-size: 24px;
             font-weight: 500;
             letter-spacing: -0.3px;
             line-height: 1.15;
@@ -286,11 +293,24 @@
                 </div>
 
                 <div class="header-datetime">
-                    {% if ticket.header_time %}
-                    <div class="header-time" style="color: {{ ticket.foreground_color }};">{{ ticket.header_time }}</div>
-                    {% endif %}
-                    {% if ticket.header_date %}
-                    <div class="header-date" style="color: {{ ticket.foreground_color }};">{{ ticket.header_date }}</div>
+                    {% if ticket.header_fields %}
+                        {% for field in ticket.header_fields %}
+                        <div class="header-field">
+                            {% if field.label %}
+                            <div class="header-label" style="color: {{ ticket.label_color }};">{{ field.label }}</div>
+                            {% endif %}
+                            {% if field.value %}
+                            <div class="header-value" style="color: {{ ticket.foreground_color }};">{{ field.value }}</div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        {% if ticket.header_date %}
+                        <div class="header-label" style="color: {{ ticket.label_color }};">{{ ticket.header_date }}</div>
+                        {% endif %}
+                        {% if ticket.header_time %}
+                        <div class="header-value" style="color: {{ ticket.foreground_color }};">{{ ticket.header_time }}</div>
+                        {% endif %}
                     {% endif %}
                 </div>
             </div>

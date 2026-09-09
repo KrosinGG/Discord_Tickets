@@ -107,10 +107,41 @@ async def generate_samples():
         ]
     }
 
+    # 4. Билет Bankhead Theater (Paula Poundstone)
+    bankhead_pass_json = {
+        "formatVersion": 1,
+        "organizationName": "LVA",
+        "logoText": "LVA",
+        "backgroundColor": "rgb(42, 45, 62)",
+        "foregroundColor": "#FFFFFF",
+        "labelColor": "rgba(255, 255, 255, 0.75)",
+        "relevantDate": "2026-09-06T03:00:00Z",
+        "eventTicket": {
+            "headerFields": [
+                {"key": "date", "label": "SEP 5, 2026", "value": "8:00 PM"}
+            ],
+            "primaryFields": [
+                {"key": "title", "label": "BANKHEAD THEATER", "value": "Paula Poundstone"}
+            ],
+            "secondaryFields": [
+                {"key": "sec", "label": "SECTION", "value": "All Seating"},
+                {"key": "seat", "label": "ROW / SEAT", "value": "P / 6"}
+            ]
+        },
+        "barcodes": [
+            {
+                "format": "PKBarcodeFormatQR",
+                "message": "ITEM-002102110",
+                "altText": "ITEM-002102110"
+            }
+        ]
+    }
+
     tickets = [
         parse_pkpass(create_mock_pkpass(red_pass_json)),
         parse_pkpass(create_mock_pkpass(blue_pass_json)),
         parse_pkpass(create_mock_pkpass(white_pass_json)),
+        parse_pkpass(create_mock_pkpass(bankhead_pass_json)),
     ]
 
     renderer = PDFRenderer()

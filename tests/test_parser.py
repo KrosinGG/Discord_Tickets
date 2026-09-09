@@ -187,3 +187,35 @@ def test_missing_pass_json_raises_error():
         zf.writestr("dummy.txt", "hello")
     with pytest.raises(ValueError, match="не найден обязательный файл 'pass.json'"):
         parse_pkpass(buffer.getvalue())
+
+
+def test_parse_bankhead_theater_timezone_issue():
+    """Тест случая, когда relevantDate в UTC (03:00 Sep 6), а headerFields содержит локальное время (8:00 PM SEP 5, 2026)."""
+    pass_json = {
+        "formatVersion": 1,
+        "organizationName": "LVA",
+        "relevantDate": "2026-09-06T03:00:00Z",  # UTC время, не должно затирать локальный заголовок
+        "eventTicket": {
+            "headerFields": [
+                {"key": "date", "label": "SEP 5, 2026", "value": "8:00 PM"}
+            ],
+            "primaryFields": [
+                {"key": "title", "label": "BANKHEAD THEATER", "value": "Paula Poundstone"}
+            ],
+            "secondaryFields": [
+                {"key": "sec", "label": "SECTION", "value": "All Seating"},
+                {"key": "seat", "label": "ROW / SEAT", "value": "P / 6"}
+            ]
+        },
+        "barcodes": [
+            {"format": "PKBarcodeFormatQR", "message": "ITEM-002102110", "altText": "ITEM-002102110"}
+        ]
+    }
+    raw_bytes = create_mock_pkpass(pass_json)
+    result = parse_pkpass(raw_bytes)
+
+    assert len(result["header_fields"]) == 1
+    assert result["header_fields"][0]["label"] == "SEP 5, 2026"
+    assert result["header_fields"][0]["value"] == "8:00 PM"
+    assert result["event_date"] == "2026-09-05"
+
