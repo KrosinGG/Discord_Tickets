@@ -1,13 +1,21 @@
 """
-Модульные тесты для парсера .pkpass.
+Модульные тесты для парсера .pkpass и бандлов .pkpasses.
 """
 
 import io
 import json
 import zipfile
+from pathlib import Path
 import pytest
 
-from parser import parse_pkpass, _is_dark_color, _parse_css_color, _format_date_time_value
+from parser import (
+    parse_pkpass,
+    extract_pkpass_files,
+    parse_pkpass_archive,
+    _is_dark_color,
+    _parse_css_color,
+    _format_date_time_value,
+)
 
 
 def create_mock_pkpass(
@@ -32,6 +40,15 @@ def create_mock_pkpass(
             zf.writestr("logo.png", dummy_png)
         if add_strip:
             zf.writestr("strip.png", dummy_png)
+    return buffer.getvalue()
+
+
+def create_mock_bundle(pkpass_bytes_list: list) -> bytes:
+    """Создает в памяти составной бандл .pkpasses, содержащий несколько файлов *.pkpass."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for idx, raw_pkpass in enumerate(pkpass_bytes_list):
+            zf.writestr(f"ticket_{idx + 1:02d}.pkpass", raw_pkpass)
     return buffer.getvalue()
 
 
@@ -219,3 +236,56 @@ def test_parse_bankhead_theater_timezone_issue():
     assert result["header_fields"][0]["value"] == "8:00 PM"
     assert result["event_date"] == "2026-09-05"
 
+
+def test_extract_pkpass_files_single():
+    """extract_pkpass_files возвращает список из одного элемента для одиночного .pkpass."""
+    pass_json = {
+        "formatVersion": 1,
+        "organizationName": "Solo",
+        "eventTicket": {}
+    }
+    raw_bytes = create_mock_pkpass(pass_json)
+    extracted = extract_pkpass_files(raw_bytes)
+
+    assert len(extracted) == 1
+    assert extracted[0] == raw_bytes
+
+
+def test_extract_pkpass_files_mock_bundle():
+    """extract_pkpass_files корректно распаковывает синтетический .pkpasses бандл."""
+    ticket1 = create_mock_pkpass({"formatVersion": 1, "organizationName": "Ticket1", "eventTicket": {}})
+    ticket2 = create_mock_pkpass({"formatVersion": 1, "organizationName": "Ticket2", "eventTicket": {}})
+    bundle_bytes = create_mock_bundle([ticket1, ticket2])
+
+    extracted = extract_pkpass_files(bundle_bytes)
+    assert len(extracted) == 2
+
+    parsed1 = parse_pkpass(extracted[0])
+    parsed2 = parse_pkpass(extracted[1])
+    assert parsed1["organization_name"] == "Ticket1"
+    assert parsed2["organization_name"] == "Ticket2"
+
+
+def test_parse_real_sample_bundle():
+    """Тест распаковки и парсинга реального бандла tests/sample_bundle.pkpasses (4 билета Etix)."""
+    bundle_path = Path(__file__).parent / "sample_bundle.pkpasses"
+    assert bundle_path.exists(), "Файл tests/sample_bundle.pkpasses должен существовать"
+
+    bundle_bytes = bundle_path.read_bytes()
+    tickets = parse_pkpass_archive(bundle_bytes)
+
+    assert len(tickets) == 4
+    for t in tickets:
+        assert t["organization_name"] != ""
+        assert t["barcode_type"] in ("1d", "qr")
+        assert len(t["barcode_uri"]) > 0
+
+
+def test_extract_pkpass_invalid_archive_error():
+    """Тест вызова ошибки при передаче архива без билетов."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as zf:
+        zf.writestr("random.txt", "nothing here")
+
+    with pytest.raises(ValueError, match="не содержит файлов билетов"):
+        extract_pkpass_files(buffer.getvalue())

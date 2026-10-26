@@ -5,6 +5,7 @@
 from unittest.mock import AsyncMock, MagicMock
 import pytest
 from bot import MAX_TICKETS, on_message
+from tests.test_parser import create_mock_bundle, create_mock_pkpass
 
 
 class DummyAttachment:
@@ -37,6 +38,34 @@ async def test_bot_rejects_over_10_tickets():
     # Создаем 11 вложений с .pkpass
     attachments = [DummyAttachment(f"ticket_{i}.pkpass") for i in range(11)]
     message.attachments = attachments
+
+    await on_message(message)
+
+    message.reply.assert_called_once_with(
+        "❌ Ошибка: Максимальное количество билетов для единовременной обработки — 10 шт."
+    )
+
+
+@pytest.mark.asyncio
+async def test_bot_rejects_pkpasses_bundle_over_10_tickets():
+    """Бот отклоняет бандл .pkpasses, если внутри содержится более 10 билетов."""
+    message = MagicMock()
+    message.author.bot = False
+    message.reply = AsyncMock()
+    message.add_reaction = AsyncMock()
+    message.remove_reaction = AsyncMock()
+    message.channel.typing = MagicMock()
+    message.channel.typing.return_value.__aenter__ = AsyncMock()
+    message.channel.typing.return_value.__aexit__ = AsyncMock()
+
+    # Создаем 1 бандл с 11 билетами
+    raw_tickets = [
+        create_mock_pkpass({"formatVersion": 1, "organizationName": f"T{i}", "eventTicket": {}})
+        for i in range(11)
+    ]
+    bundle_bytes = create_mock_bundle(raw_tickets)
+
+    message.attachments = [DummyAttachment("orders.pkpasses", bundle_bytes)]
 
     await on_message(message)
 

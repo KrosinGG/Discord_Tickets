@@ -397,3 +397,55 @@ def parse_pkpass(file_bytes: bytes) -> Dict[str, Any]:
         "event_date": event_date_str,
         "pass_type": pass_type_name,
     }
+
+
+def extract_pkpass_files(file_bytes: bytes) -> List[bytes]:
+    """
+    Распаковывает архив в памяти и определяет его тип:
+    - Если это составной бандл .pkpasses (содержит внутри файлы *.pkpass) -> возвращает список байтов каждого *.pkpass.
+    - Если это одиночный билет .pkpass (содержит pass.json) -> возвращает [file_bytes].
+    - Если архив некорректен или пуст -> возбуждает ValueError.
+    """
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(file_bytes))
+    except zipfile.BadZipFile as e:
+        raise ValueError(f"Файл не является корректным ZIP-архивом Apple Pass: {e}")
+
+    file_list = zf.namelist()
+
+    # 1. Проверяем наличие вложенных файлов .pkpass (пакетный архив .pkpasses)
+    nested_pkpasses = [
+        f for f in file_list
+        if f.lower().endswith(".pkpass") and not f.startswith("__MACOSX") and not f.endswith("/")
+    ]
+
+    if nested_pkpasses:
+        # Сортируем по имени для детерминированного порядка страниц
+        nested_pkpasses.sort()
+        logger.info("Обнаружен составной архив .pkpasses с %d билетами", len(nested_pkpasses))
+        extracted: List[bytes] = []
+        for name in nested_pkpasses:
+            extracted.append(zf.read(name))
+        return extracted
+
+    # 2. Проверяем, является ли архив одиночным .pkpass (содержит pass.json)
+    has_pass_json = any(
+        f.lower() == "pass.json" or f.lower().endswith("/pass.json")
+        for f in file_list
+    )
+    if has_pass_json:
+        return [file_bytes]
+
+    raise ValueError("Архив не содержит файлов билетов (.pkpass) или файла pass.json")
+
+
+def parse_pkpass_archive(file_bytes: bytes) -> List[Dict[str, Any]]:
+    """
+    Универсальный парсер для одиночных .pkpass и пакетных архивов .pkpasses.
+    Возвращает список словарей распарсенных билетов.
+    """
+    pkpass_bytes_list = extract_pkpass_files(file_bytes)
+    parsed_tickets: List[Dict[str, Any]] = []
+    for raw_bytes in pkpass_bytes_list:
+        parsed_tickets.append(parse_pkpass(raw_bytes))
+    return parsed_tickets
